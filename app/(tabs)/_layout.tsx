@@ -13,7 +13,7 @@ function TabIcon({
   color: string
   size: number
 }) {
-  return <Ionicons name={name} size={size} color={color} />
+  return <Ionicons name={name} size={size} color={color as string} />
 }
 
 export default function TabsLayout() {
@@ -44,7 +44,7 @@ export default function TabsLayout() {
         options={{
           title: 'Today',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="home" color={color} size={size} />
+            <TabIcon name="home" color={color as string} size={size} />
           ),
         }}
       />
@@ -53,7 +53,7 @@ export default function TabsLayout() {
         options={{
           title: 'Habits',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="checkmark-circle" color={color} size={size} />
+            <TabIcon name="checkmark-circle" color={color as string} size={size} />
           ),
         }}
       />
@@ -62,7 +62,7 @@ export default function TabsLayout() {
         options={{
           title: 'Identity',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="person" color={color} size={size} />
+            <TabIcon name="person" color={color as string} size={size} />
           ),
         }}
       />
@@ -71,7 +71,7 @@ export default function TabsLayout() {
         options={{
           title: 'Analytics',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="bar-chart" color={color} size={size} />
+            <TabIcon name="bar-chart" color={color as string} size={size} />
           ),
         }}
       />
@@ -80,7 +80,7 @@ export default function TabsLayout() {
         options={{
           title: 'Coach',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="sparkles" color={color} size={size} />
+            <TabIcon name="sparkles" color={color as string} size={size} />
           ),
         }}
       />

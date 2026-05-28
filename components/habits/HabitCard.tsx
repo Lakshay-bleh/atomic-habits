@@ -90,7 +90,7 @@ export function HabitCard({
           {/* Header row */}
           <View style={styles.headerRow}>
             <View style={styles.titleGroup}>
-              <Text style={[styles.icon]}>{habit.icon ?? category?.icon ?? '✦'}</Text>
+              <Text style={[styles.icon]}>{habit.icon ?? category?.emoji ?? '✦'}</Text>
               <View>
                 <Text
                   style={[

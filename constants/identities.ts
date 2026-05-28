@@ -160,14 +160,14 @@ export const IDENTITY_TEMPLATES: Record<IdentityTemplate, IdentityTemplateConfig
 }
 
 export const HABIT_CATEGORIES = [
-  { id: 'health', label: 'Health', icon: '❤️', color: '#10B981' },
-  { id: 'fitness', label: 'Fitness', icon: '💪', color: '#EF4444' },
-  { id: 'mindfulness', label: 'Mindfulness', icon: '🧘', color: '#14B8A6' },
-  { id: 'learning', label: 'Learning', icon: '📚', color: '#6366F1' },
-  { id: 'creativity', label: 'Creativity', icon: '🎨', color: '#EC4899' },
-  { id: 'relationships', label: 'Relationships', icon: '👥', color: '#F59E0B' },
-  { id: 'finances', label: 'Finances', icon: '💰', color: '#10B981' },
-  { id: 'productivity', label: 'Productivity', icon: '⚡', color: '#8B5CF6' },
-  { id: 'spirituality', label: 'Spirituality', icon: '✨', color: '#F97316' },
-  { id: 'other', label: 'Other', icon: '🌟', color: '#94A3B8' },
+  { id: 'health', label: 'Health', emoji: '❤️', color: '#10B981' },
+  { id: 'fitness', label: 'Fitness', emoji: '💪', color: '#EF4444' },
+  { id: 'mindfulness', label: 'Mindfulness', emoji: '🧘', color: '#14B8A6' },
+  { id: 'learning', label: 'Learning', emoji: '📚', color: '#6366F1' },
+  { id: 'creativity', label: 'Creativity', emoji: '🎨', color: '#EC4899' },
+  { id: 'relationships', label: 'Relationships', emoji: '👥', color: '#F59E0B' },
+  { id: 'finances', label: 'Finances', emoji: '💰', color: '#10B981' },
+  { id: 'productivity', label: 'Productivity', emoji: '⚡', color: '#8B5CF6' },
+  { id: 'spirituality', label: 'Spirituality', emoji: '✨', color: '#F97316' },
+  { id: 'other', label: 'Other', emoji: '🌟', color: '#94A3B8' },
 ] as const

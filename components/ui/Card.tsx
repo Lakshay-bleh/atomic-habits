@@ -1,12 +1,12 @@
 import React from 'react'
-import { View, StyleSheet, type ViewStyle } from 'react-native'
+import { View, StyleSheet, type ViewStyle, type StyleProp } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { useTheme } from '@/hooks/useTheme'
 import { Radius, Spacing, Shadows } from '@/constants/themes'
 
 interface CardProps {
   children: React.ReactNode
-  style?: ViewStyle
+  style?: StyleProp<ViewStyle>
   variant?: 'default' | 'glass' | 'elevated'
   padding?: number
 }

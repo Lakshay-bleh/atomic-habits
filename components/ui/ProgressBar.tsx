@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, type ViewStyle } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,6 +15,7 @@ interface ProgressBarProps {
   color?: string
   backgroundColor?: string
   animated?: boolean
+  style?: ViewStyle
 }
 
 export function ProgressBar({
@@ -23,6 +24,7 @@ export function ProgressBar({
   color,
   backgroundColor,
   animated = true,
+  style,
 }: ProgressBarProps) {
   const theme = useTheme()
   const width = useSharedValue(0)
@@ -49,6 +51,7 @@ export function ProgressBar({
           borderRadius: height / 2,
           backgroundColor: backgroundColor ?? theme.surfaceHigh,
         },
+        style,
       ]}
     >
       <Animated.View

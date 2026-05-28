@@ -118,7 +118,7 @@ export default function DashboardScreen() {
             </Text>
           </View>
           <TouchableOpacity
-            onPress={() => router.push('/settings')}
+            onPress={() => router.push('/settings' as never)}
             style={[styles.avatarBtn, { backgroundColor: theme.surfaceHigh }]}
           >
             <Text style={styles.avatarText}>
@@ -206,7 +206,7 @@ export default function DashboardScreen() {
                 isCompleted={isCompletedToday(habit.id)}
                 streak={getStreakForHabit(habit.id)}
                 onComplete={() => handleComplete(habit.id)}
-                onPress={() => router.push(`/habit/${habit.id}`)}
+                onPress={() => router.push(`/habit/${habit.id}` as never)}
               />
             ))
           )}

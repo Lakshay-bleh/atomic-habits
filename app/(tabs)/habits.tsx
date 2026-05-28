@@ -128,7 +128,7 @@ export default function HabitsScreen() {
                 isCompleted={isCompletedToday(habit.id)}
                 streak={getStreakForHabit(habit.id)}
                 onComplete={() => completeHabit(habit.id, user?.id ?? '')}
-                onPress={() => router.push(`/habit/${habit.id}`)}
+                onPress={() => router.push(`/habit/${habit.id}` as never)}
               />
             </Animated.View>
           ))
