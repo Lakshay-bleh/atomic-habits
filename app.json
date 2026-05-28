@@ -40,11 +40,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "57cd5fdf-6082-407c-a104-b72cb11c9655"
       },
-      "supabaseUrl": "",
-      "supabaseAnonKey": "",
-      "groqApiKey": ""
-    }
+      "router": {}
+    },
+    "owner": "lakshay-bleh"
   }
 }
