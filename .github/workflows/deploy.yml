@@ -1,0 +1,41 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy-stores:
+    name: Submit to App Stores
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build Android Production
+        run: eas build --platform android --profile production --non-interactive
+
+      - name: Build iOS Production
+        run: eas build --platform ios --profile production --non-interactive
+
+      - name: Submit Android to Play Store
+        run: eas submit --platform android --latest --non-interactive
+
+      - name: Submit iOS to App Store
+        run: eas submit --platform ios --latest --non-interactive
