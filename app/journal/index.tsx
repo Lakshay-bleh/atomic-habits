@@ -14,18 +14,58 @@ import { Ionicons } from '@expo/vector-icons'
 import { format } from 'date-fns'
 import { useAuthStore } from '@/stores/authStore'
 import { useJournalStore } from '@/stores/journalStore'
+import { useHabitsStore } from '@/stores/habitsStore'
+import { useIdentityStore } from '@/stores/identityStore'
 import { coachService } from '@/services/ai/coach'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useTheme } from '@/hooks/useTheme'
 import { Typography, Spacing, Radius } from '@/constants/themes'
 
-const MOOD_LABELS = ['😔', '😕', '😐', '😊', '🤩']
+const MOOD_ICONS: { icon: string; label: string }[] = [
+  { icon: 'sad-outline', label: 'Low' },
+  { icon: 'sad-outline', label: 'Meh' },
+  { icon: 'remove-outline', label: 'Okay' },
+  { icon: 'happy-outline', label: 'Good' },
+  { icon: 'happy-outline', label: 'Great' },
+]
+
+const ENERGY_ICONS: { icon: string; label: string }[] = [
+  { icon: 'battery-dead-outline', label: 'Drained' },
+  { icon: 'battery-half-outline', label: 'Low' },
+  { icon: 'battery-half-outline', label: 'Okay' },
+  { icon: 'battery-full-outline', label: 'High' },
+  { icon: 'flash-outline', label: 'Peak' },
+]
+
+const PROMPT_CONFIGS: { key: 'whatWorked' | 'friction' | 'identity'; question: string; placeholder: string; icon: string }[] = [
+  {
+    key: 'whatWorked',
+    question: 'What worked today?',
+    placeholder: 'Habits completed, moments of clarity, small wins...',
+    icon: 'checkmark-circle-outline',
+  },
+  {
+    key: 'friction',
+    question: 'What caused friction?',
+    placeholder: 'Resistance, distractions, missed habits...',
+    icon: 'alert-circle-outline',
+  },
+  {
+    key: 'identity',
+    question: 'Which identity did you reinforce?',
+    placeholder: 'e.g. "I showed up as a disciplined creator"',
+    icon: 'person-outline',
+  },
+]
 
 export default function JournalScreen() {
   const theme = useTheme()
   const { user } = useAuthStore()
   const { todayEntry, saveEntry, loadTodayEntry } = useJournalStore()
+  const { habits, getStreakForHabit } = useHabitsStore()
+  const { primaryIdentity } = useIdentityStore()
+
   const [whatWorked, setWhatWorked] = useState('')
   const [friction, setFriction] = useState('')
   const [identity, setIdentity] = useState('')
@@ -35,13 +75,12 @@ export default function JournalScreen() {
   const [aiInsight, setAiInsight] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const today = format(new Date(), 'EEEE, MMMM d')
 
   useEffect(() => {
-    if (user?.id) {
-      loadTodayEntry(user.id)
-    }
+    if (user?.id) loadTodayEntry(user.id)
   }, [user?.id])
 
   useEffect(() => {
@@ -69,6 +108,8 @@ export default function JournalScreen() {
         energy,
         ai_insights: aiInsight,
       })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
     } finally {
       setIsSaving(false)
     }
@@ -77,115 +118,115 @@ export default function JournalScreen() {
   const generateInsight = async () => {
     setIsGenerating(true)
     try {
-      const context = [whatWorked, friction, identity, freeText]
-        .filter(Boolean)
-        .join(' | ')
-      const insight = await coachService.analyzePatterns(
-        { 'Overall today': mood * 20 },
-        identity || 'a person building habits',
-      )
+      const completionData: Record<string, number> = {}
+      habits.forEach((h) => {
+        const streak = getStreakForHabit(h.id)
+        completionData[h.title] = streak?.total_completions
+          ? Math.min(100, Math.round((streak.total_completions / 30) * 100))
+          : 0
+      })
+
+      const identityLabel = (primaryIdentity?.label ?? identity) || 'someone building better habits'
+      const insight = await coachService.analyzePatterns(completionData, identityLabel)
       setAiInsight(insight)
     } catch {} finally {
       setIsGenerating(false)
     }
   }
 
+  const textAreaValues: Record<string, string> = { whatWorked, friction, identity }
+  const promptSetters: Record<string, (v: string) => void> = { whatWorked: setWhatWorked, friction: setFriction, identity: setIdentity }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.text }]}>Journal</Text>
-        <Text style={[styles.date, { color: theme.textMuted }]}>{today}</Text>
+        <View>
+          <Text style={[styles.title, { color: theme.text }]}>Evening Reflection</Text>
+          <Text style={[styles.date, { color: theme.textMuted }]}>{today}</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {/* Mood & Energy */}
         <Card style={styles.moodCard} variant="elevated">
-          <View style={styles.moodRow}>
-            <View style={styles.moodGroup}>
-              <Text style={[styles.moodLabel, { color: theme.textSecondary }]}>
-                Mood
-              </Text>
-              <View style={styles.emojiRow}>
-                {MOOD_LABELS.map((emoji, idx) => (
+          <View style={styles.moodSection}>
+            <Text style={[styles.moodSectionLabel, { color: theme.textSecondary }]}>Mood</Text>
+            <View style={styles.ratingRow}>
+              {MOOD_ICONS.map((item, idx) => {
+                const selected = mood === idx + 1
+                return (
                   <TouchableOpacity
                     key={idx}
                     onPress={() => setMood(idx + 1)}
                     style={[
-                      styles.emojiBtn,
-                      mood === idx + 1 && {
-                        backgroundColor: `${theme.primary}30`,
-                        borderRadius: Radius.sm,
+                      styles.ratingBtn,
+                      {
+                        backgroundColor: selected ? `${theme.primary}20` : theme.surfaceHigh,
+                        borderColor: selected ? theme.primary : 'transparent',
                       },
                     ]}
                   >
-                    <Text style={[styles.emoji, mood === idx + 1 && styles.emojiSelected]}>
-                      {emoji}
+                    <Ionicons
+                      name={item.icon as any}
+                      size={22}
+                      color={selected ? theme.primary : theme.textMuted}
+                    />
+                    <Text style={[styles.ratingLabel, { color: selected ? theme.primary : theme.textMuted }]}>
+                      {item.label}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                )
+              })}
             </View>
+          </View>
 
-            <View style={styles.moodGroup}>
-              <Text style={[styles.moodLabel, { color: theme.textSecondary }]}>
-                Energy
-              </Text>
-              <View style={styles.emojiRow}>
-                {['🪫', '😴', '⚡', '🔋', '🚀'].map((emoji, idx) => (
+          <View style={[styles.moodDivider, { backgroundColor: theme.border }]} />
+
+          <View style={styles.moodSection}>
+            <Text style={[styles.moodSectionLabel, { color: theme.textSecondary }]}>Energy</Text>
+            <View style={styles.ratingRow}>
+              {ENERGY_ICONS.map((item, idx) => {
+                const selected = energy === idx + 1
+                return (
                   <TouchableOpacity
                     key={idx}
                     onPress={() => setEnergy(idx + 1)}
                     style={[
-                      styles.emojiBtn,
-                      energy === idx + 1 && {
-                        backgroundColor: `${theme.accent}30`,
-                        borderRadius: Radius.sm,
+                      styles.ratingBtn,
+                      {
+                        backgroundColor: selected ? `${theme.accent}20` : theme.surfaceHigh,
+                        borderColor: selected ? theme.accent : 'transparent',
                       },
                     ]}
                   >
-                    <Text style={[styles.emoji, energy === idx + 1 && styles.emojiSelected]}>
-                      {emoji}
+                    <Ionicons
+                      name={item.icon as any}
+                      size={22}
+                      color={selected ? theme.accent : theme.textMuted}
+                    />
+                    <Text style={[styles.ratingLabel, { color: selected ? theme.accent : theme.textMuted }]}>
+                      {item.label}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                )
+              })}
             </View>
           </View>
         </Card>
 
         {/* Reflection prompts */}
-        {[
-          {
-            question: 'What worked today?',
-            value: whatWorked,
-            onChange: setWhatWorked,
-            placeholder: 'Habits completed, moments of clarity...',
-            icon: '✅',
-          },
-          {
-            question: 'What caused friction?',
-            value: friction,
-            onChange: setFriction,
-            placeholder: 'Resistance, distractions, missed habits...',
-            icon: '🔍',
-          },
-          {
-            question: 'Which identity did you reinforce?',
-            value: identity,
-            onChange: setIdentity,
-            placeholder: 'e.g. "I showed up as a disciplined creator"',
-            icon: '🧬',
-          },
-        ].map((prompt) => (
-          <View key={prompt.question} style={styles.promptSection}>
+        {PROMPT_CONFIGS.map((prompt) => (
+          <View key={prompt.key} style={styles.promptSection}>
             <View style={styles.promptHeader}>
-              <Text style={styles.promptIcon}>{prompt.icon}</Text>
+              <Ionicons name={prompt.icon as any} size={18} color={theme.primary} />
               <Text style={[styles.promptQuestion, { color: theme.text }]}>
                 {prompt.question}
               </Text>
@@ -201,8 +242,8 @@ export default function JournalScreen() {
               ]}
               placeholder={prompt.placeholder}
               placeholderTextColor={theme.textMuted}
-              value={prompt.value}
-              onChangeText={prompt.onChange}
+              value={textAreaValues[prompt.key]}
+              onChangeText={promptSetters[prompt.key]}
               multiline
               numberOfLines={3}
             />
@@ -211,9 +252,12 @@ export default function JournalScreen() {
 
         {/* Free form */}
         <View style={styles.promptSection}>
-          <Text style={[styles.promptQuestion, { color: theme.text }]}>
-            Anything else on your mind?
-          </Text>
+          <View style={styles.promptHeader}>
+            <Ionicons name="create-outline" size={18} color={theme.primary} />
+            <Text style={[styles.promptQuestion, { color: theme.text }]}>
+              Anything else on your mind?
+            </Text>
+          </View>
           <TextInput
             style={[
               styles.textArea,
@@ -237,32 +281,53 @@ export default function JournalScreen() {
         {aiInsight ? (
           <Card style={styles.insightCard} variant="elevated">
             <View style={styles.insightHeader}>
-              <Text style={styles.insightIcon}>🤖</Text>
-              <Text style={[styles.insightLabel, { color: theme.primary }]}>
-                AI Insight
-              </Text>
+              <View style={[styles.insightIconWrap, { backgroundColor: `${theme.primary}20` }]}>
+                <Ionicons name="sparkles" size={14} color={theme.primary} />
+              </View>
+              <Text style={[styles.insightLabel, { color: theme.primary }]}>AI INSIGHT</Text>
+              <TouchableOpacity onPress={generateInsight} disabled={isGenerating} style={{ marginLeft: 'auto' }}>
+                {isGenerating
+                  ? <ActivityIndicator size="small" color={theme.primary} />
+                  : <Ionicons name="refresh" size={16} color={theme.textMuted} />
+                }
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.insightText, { color: theme.text }]}>
-              {aiInsight}
-            </Text>
+            <Text style={[styles.insightText, { color: theme.text }]}>{aiInsight}</Text>
           </Card>
         ) : (
-          <Button
-            title={isGenerating ? 'Analyzing...' : '✨ Get AI Insight'}
-            variant="secondary"
+          <TouchableOpacity
+            style={[styles.insightPrompt, { backgroundColor: theme.card, borderColor: theme.border }]}
             onPress={generateInsight}
-            isLoading={isGenerating}
-            fullWidth
-          />
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Ionicons name="sparkles-outline" size={18} color={theme.primary} />
+            )}
+            <Text style={[styles.insightPromptText, { color: theme.primary }]}>
+              {isGenerating ? 'Analyzing your patterns...' : 'Get AI Insight'}
+            </Text>
+          </TouchableOpacity>
         )}
 
-        <Button
-          title="Save Reflection"
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            { backgroundColor: saved ? '#10B981' : theme.primary },
+          ]}
           onPress={handleSave}
-          isLoading={isSaving}
-          fullWidth
-          style={styles.saveButton}
-        />
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name={saved ? 'checkmark' : 'save-outline'} size={18} color="#fff" />
+          )}
+          <Text style={styles.saveButtonText}>
+            {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Reflection'}
+          </Text>
+        </TouchableOpacity>
 
         <View style={{ height: Spacing['3xl'] }} />
       </ScrollView>
@@ -278,45 +343,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing['2xl'],
     paddingVertical: Spacing.base,
+    borderBottomWidth: 1,
   },
-  title: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.bold,
-    flex: 1,
-    textAlign: 'center',
-  },
-  date: { fontSize: Typography.sizes.sm },
+  backBtn: { width: 40 },
+  title: { fontSize: Typography.sizes.lg, fontWeight: Typography.weights.bold, textAlign: 'center' },
+  date: { fontSize: Typography.sizes.xs, textAlign: 'center', marginTop: 2 },
   scroll: {
     paddingHorizontal: Spacing['2xl'],
+    paddingTop: Spacing.base,
     gap: Spacing.base,
     paddingBottom: Spacing['3xl'],
   },
   moodCard: { gap: Spacing.sm },
-  moodRow: { gap: Spacing.base },
-  moodGroup: { gap: Spacing.xs },
-  moodLabel: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium },
-  emojiRow: { flexDirection: 'row', gap: Spacing.xs },
-  emojiBtn: { padding: 4 },
-  emoji: { fontSize: 24, opacity: 0.5 },
-  emojiSelected: { opacity: 1 },
-  promptSection: { gap: Spacing.sm },
-  promptHeader: {
-    flexDirection: 'row',
+  moodSection: { gap: Spacing.xs },
+  moodSectionLabel: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium },
+  moodDivider: { height: StyleSheet.hairlineWidth },
+  ratingRow: { flexDirection: 'row', gap: Spacing.xs },
+  ratingBtn: {
+    flex: 1,
     alignItems: 'center',
-    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 2,
   },
-  promptIcon: { fontSize: 18 },
-  promptQuestion: {
-    fontSize: Typography.sizes.base,
-    fontWeight: Typography.weights.semibold,
-  },
+  ratingLabel: { fontSize: 9, fontWeight: Typography.weights.medium },
+  promptSection: { gap: Spacing.sm },
+  promptHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  promptQuestion: { fontSize: Typography.sizes.base, fontWeight: Typography.weights.semibold },
   textArea: {
     borderRadius: Radius.lg,
     borderWidth: 1.5,
     padding: Spacing.md,
     fontSize: Typography.sizes.base,
     textAlignVertical: 'top',
-    minHeight: 60,
+    minHeight: 64,
+    lineHeight: 22,
   },
   insightCard: { gap: Spacing.sm },
   insightHeader: {
@@ -324,13 +386,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
   },
-  insightIcon: { fontSize: 16 },
-  insightLabel: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  insightIconWrap: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  insightLabel: { fontSize: Typography.sizes.xs, fontWeight: Typography.weights.bold, letterSpacing: 1 },
   insightText: { fontSize: Typography.sizes.base, lineHeight: 22 },
-  saveButton: { marginTop: Spacing.xs },
+  insightPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.base,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  insightPromptText: { fontSize: Typography.sizes.base, fontWeight: Typography.weights.medium },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.base,
+    borderRadius: Radius.xl,
+    marginTop: Spacing.xs,
+  },
+  saveButtonText: { color: '#fff', fontSize: Typography.sizes.base, fontWeight: Typography.weights.semibold },
 })

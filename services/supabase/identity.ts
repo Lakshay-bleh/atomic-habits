@@ -24,11 +24,18 @@ export const identityService = {
     return data
   },
 
-  async updateIdentityScore(
-    id: string,
-    score: number,
-    confidence: number,
-  ): Promise<Identity> {
+  async updateIdentity(id: string, updates: Partial<Identity>): Promise<Identity> {
+    const { data, error } = await supabase
+      .from('identities')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async updateIdentityScore(id: string, score: number, confidence: number): Promise<Identity> {
     const { data, error } = await supabase
       .from('identities')
       .update({ score, confidence, updated_at: new Date().toISOString() })
@@ -69,18 +76,23 @@ export const identityService = {
     return data
   },
 
-  async getEvolution(
-    identityId: string,
-    days = 30,
-  ): Promise<IdentityEvolution[]> {
-    const startDate = new Date(
-      Date.now() - days * 24 * 60 * 60 * 1000,
-    ).toISOString()
+  async deleteIdentity(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('identities')
+      .delete()
+      .eq('id', id)
+    if (error) throw error
+  },
+
+  async getEvolution(identityId: string, days = 30): Promise<IdentityEvolution[]> {
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0]
     const { data, error } = await supabase
       .from('identity_evolution')
       .select('*')
       .eq('identity_id', identityId)
-      .gte('created_at', startDate)
+      .gte('date', startDate)
       .order('date', { ascending: true })
     if (error) throw error
     return data ?? []

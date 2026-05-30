@@ -23,7 +23,7 @@ import type { HabitCategory } from '@/types'
 export default function HabitsScreen() {
   const theme = useTheme()
   const { user } = useAuthStore()
-  const { habits, loadHabits, loadTodayLogs, loadStreaks, completeHabit, isCompletedToday, getStreakForHabit } = useHabitsStore()
+  const { habits, loadHabits, loadTodayLogs, loadStreaks, completeHabit, uncompleteHabit, isCompletedToday, getStreakForHabit } = useHabitsStore()
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<HabitCategory | 'all'>('all')
 
@@ -107,14 +107,18 @@ export default function HabitsScreen() {
       >
         {filtered.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🔍</Text>
+            <Ionicons
+              name={habits.length === 0 ? 'leaf-outline' : 'search-outline'}
+              size={40}
+              color={theme.textMuted}
+            />
             <Text style={[styles.emptyTitle, { color: theme.text }]}>
               {habits.length === 0 ? 'No habits yet' : 'No matches'}
             </Text>
             <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
               {habits.length === 0
                 ? 'Create your first tiny habit'
-                : 'Try a different search'}
+                : 'Try a different search or category'}
             </Text>
           </View>
         ) : (
@@ -129,6 +133,7 @@ export default function HabitsScreen() {
                 streak={getStreakForHabit(habit.id)}
                 onComplete={() => completeHabit(habit.id, user?.id ?? '')}
                 onPress={() => router.push(`/habit/${habit.id}` as never)}
+                onUncomplete={() => user?.id && uncompleteHabit(habit.id, user.id)}
               />
             </Animated.View>
           ))

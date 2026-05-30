@@ -31,7 +31,7 @@ type FormData = z.infer<typeof schema>
 
 export default function RegisterScreen() {
   const theme = useTheme()
-  const { signUp, isLoading } = useAuthStore()
+  const { signUp, loadUser, isLoading } = useAuthStore()
   const [error, setError] = useState<string | null>(null)
 
   const { control, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -42,6 +42,8 @@ export default function RegisterScreen() {
     try {
       setError(null)
       await signUp(data.email, data.password, data.fullName)
+      // Load the session so user.id is available during onboarding
+      await loadUser()
       router.replace('/onboarding/welcome')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')

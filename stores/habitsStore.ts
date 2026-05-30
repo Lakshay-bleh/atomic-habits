@@ -25,6 +25,8 @@ interface HabitsState {
   isCompletedToday: (habitId: string) => boolean
   getStreakForHabit: (habitId: string) => HabitStreak | null
   setSelectedDate: (date: string) => void
+  uncompleteHabit: (habitId: string, userId: string) => Promise<void>
+  deleteHabit: (id: string) => Promise<void>
 }
 
 export const useHabitsStore = create<HabitsState>((set, get) => ({
@@ -95,6 +97,21 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
       skip_reason: null,
     })
     set((state) => ({ todayLogs: [...state.todayLogs, log] }))
+  },
+
+  uncompleteHabit: async (habitId, userId) => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    await habitsService.deleteHabitLog(habitId, userId, today)
+    set((state) => ({
+      todayLogs: state.todayLogs.filter(
+        (log) => !(log.habit_id === habitId && log.date === today)
+      ),
+    }))
+  },
+
+  deleteHabit: async (id) => {
+    await habitsService.deleteHabit(id)
+    set((state) => ({ habits: state.habits.filter((h) => h.id !== id) }))
   },
 
   isCompletedToday: (habitId) => {

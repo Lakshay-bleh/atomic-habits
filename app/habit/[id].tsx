@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -20,7 +21,16 @@ export default function HabitDetailScreen() {
   const theme = useTheme()
   const { id } = useLocalSearchParams<{ id: string }>()
   const { user } = useAuthStore()
-  const { habits, streaks, loadHabits, loadStreaks, isCompletedToday, completeHabit, getStreakForHabit } = useHabitsStore()
+  const {
+    habits,
+    loadHabits,
+    loadStreaks,
+    isCompletedToday,
+    completeHabit,
+    uncompleteHabit,
+    deleteHabit,
+    getStreakForHabit,
+  } = useHabitsStore()
 
   const habit = habits.find((h) => h.id === id)
   const streak = id ? getStreakForHabit(id) : null
@@ -33,6 +43,42 @@ export default function HabitDetailScreen() {
     }
   }, [user?.id])
 
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete habit?',
+      `"${habit?.title}" and all its history will be permanently removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (id) {
+              await deleteHabit(id)
+              router.back()
+            }
+          },
+        },
+      ]
+    )
+  }
+
+  const handleUncomplete = () => {
+    if (!id || !user?.id) return
+    Alert.alert(
+      'Undo completion?',
+      "Remove today's check-in for this habit?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Undo',
+          style: 'destructive',
+          onPress: () => uncompleteHabit(id, user.id!),
+        },
+      ]
+    )
+  }
+
   if (!habit) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -42,9 +88,7 @@ export default function HabitDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.notFound}>
-          <Text style={[styles.notFoundText, { color: theme.textSecondary }]}>
-            Habit not found
-          </Text>
+          <Text style={[styles.notFoundText, { color: theme.textSecondary }]}>Habit not found</Text>
         </View>
       </SafeAreaView>
     )
@@ -52,61 +96,68 @@ export default function HabitDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
           {habit.title}
         </Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => router.push(`/habit/create?id=${id}` as never)}
+            style={styles.headerBtn}
+          >
+            <Ionicons name="pencil-outline" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} style={styles.headerBtn}>
+            <Ionicons name="trash-outline" size={20} color={theme.error} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero card */}
         <Card style={styles.heroCard} variant="elevated">
-          <Text style={styles.habitIcon}>{habit.icon ?? '✦'}</Text>
+          <Text style={styles.habitIcon}>{habit.icon ?? '●'}</Text>
           <Text style={[styles.habitTitle, { color: theme.text }]}>{habit.title}</Text>
           {habit.tiny_version && (
             <Text style={[styles.tinyVersion, { color: theme.textSecondary }]}>
-              Tiny: {habit.tiny_version}
+              Two-minute: {habit.tiny_version}
             </Text>
           )}
 
-          {/* Streak stats */}
           <View style={styles.statsRow}>
             <View style={styles.stat}>
               <Text style={[styles.statValue, { color: theme.primary }]}>
                 {streak?.current_streak ?? 0}
               </Text>
-              <Text style={[styles.statLabel, { color: theme.textMuted }]}>Current Streak</Text>
+              <Text style={[styles.statLabel, { color: theme.textMuted }]}>Streak</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
             <View style={styles.stat}>
               <Text style={[styles.statValue, { color: theme.accent }]}>
                 {streak?.longest_streak ?? 0}
               </Text>
-              <Text style={[styles.statLabel, { color: theme.textMuted }]}>Best Streak</Text>
+              <Text style={[styles.statLabel, { color: theme.textMuted }]}>Best</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
             <View style={styles.stat}>
               <Text style={[styles.statValue, { color: '#F59E0B' }]}>
-                {Math.round((streak?.consistency_rate ?? 0) * 100)}%
+                {Math.round(streak?.consistency_rate ?? 0)}%
               </Text>
               <Text style={[styles.statLabel, { color: theme.textMuted }]}>Consistency</Text>
             </View>
           </View>
 
           <ProgressBar
-            progress={streak?.consistency_rate ?? 0}
+            progress={(streak?.consistency_rate ?? 0) / 100}
             height={6}
             color={habit.color ?? theme.primary}
             style={{ marginTop: Spacing.sm }}
           />
         </Card>
 
-        {/* Complete button */}
-        {!isCompleted && (
+        {!isCompleted ? (
           <TouchableOpacity
             style={[styles.completeBtn, { backgroundColor: habit.color ?? theme.primary }]}
             onPress={() => user?.id && completeHabit(habit.id, user.id)}
@@ -114,15 +165,32 @@ export default function HabitDetailScreen() {
             <Ionicons name="checkmark-circle" size={22} color="#fff" />
             <Text style={styles.completeBtnText}>Mark Complete Today</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={[styles.completedRow, { borderColor: theme.border }]}>
+            <View style={[styles.completedBanner, { backgroundColor: `${habit.color ?? theme.primary}20` }]}>
+              <Ionicons name="checkmark-circle" size={20} color={habit.color ?? theme.primary} />
+              <Text style={[styles.completedText, { color: habit.color ?? theme.primary }]}>
+                Done today
+              </Text>
+            </View>
+            <TouchableOpacity onPress={handleUncomplete} style={styles.undoBtn}>
+              <Text style={[styles.undoText, { color: theme.textMuted }]}>Undo</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
-        {isCompleted && (
-          <View style={[styles.completedBanner, { backgroundColor: `${habit.color ?? theme.primary}20`, borderColor: `${habit.color ?? theme.primary}40` }]}>
-            <Ionicons name="checkmark-circle" size={22} color={habit.color ?? theme.primary} />
-            <Text style={[styles.completedText, { color: habit.color ?? theme.primary }]}>
-              Completed today!
-            </Text>
-          </View>
+        {habit.cue && (
+          <Card style={styles.loopCard}>
+            <Text style={[styles.loopLabel, { color: theme.textMuted }]}>CUE</Text>
+            <Text style={[styles.loopValue, { color: theme.text }]}>{habit.cue}</Text>
+          </Card>
+        )}
+
+        {habit.reward && (
+          <Card style={styles.loopCard}>
+            <Text style={[styles.loopLabel, { color: theme.textMuted }]}>REWARD</Text>
+            <Text style={[styles.loopValue, { color: theme.text }]}>{habit.reward}</Text>
+          </Card>
         )}
 
         <View style={{ height: Spacing['3xl'] }} />
@@ -139,22 +207,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing['2xl'],
     paddingVertical: Spacing.base,
+    borderBottomWidth: 1,
   },
   headerTitle: {
     fontSize: Typography.sizes.base,
     fontWeight: Typography.weights.semibold,
     flex: 1,
     textAlign: 'center',
-    marginHorizontal: Spacing.base,
+    marginHorizontal: Spacing.sm,
   },
-  notFound: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  headerActions: { flexDirection: 'row', gap: Spacing.sm },
+  headerBtn: { padding: 4 },
+  notFound: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   notFoundText: { fontSize: Typography.sizes.base },
   heroCard: {
     marginHorizontal: Spacing['2xl'],
+    marginTop: Spacing.base,
     marginBottom: Spacing.base,
     alignItems: 'center',
     gap: Spacing.sm,
@@ -176,23 +244,13 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     width: '100%',
   },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: {
     fontSize: Typography.sizes['2xl'],
     fontWeight: Typography.weights.extrabold,
   },
-  statLabel: {
-    fontSize: Typography.sizes.xs,
-    textAlign: 'center',
-  },
-  statDivider: {
-    width: 1,
-    height: 36,
-  },
+  statLabel: { fontSize: Typography.sizes.xs, textAlign: 'center' },
+  statDivider: { width: 1, height: 36 },
   completeBtn: {
     marginHorizontal: Spacing['2xl'],
     borderRadius: Radius.xl,
@@ -208,19 +266,40 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     fontWeight: Typography.weights.semibold,
   },
-  completedBanner: {
+  completedRow: {
     marginHorizontal: Spacing['2xl'],
+    marginBottom: Spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  completedBanner: {
+    flex: 1,
     borderRadius: Radius.xl,
-    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.base,
     gap: Spacing.sm,
-    marginBottom: Spacing.base,
   },
   completedText: {
     fontSize: Typography.sizes.base,
     fontWeight: Typography.weights.semibold,
   },
+  undoBtn: {
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+  },
+  undoText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
+    textDecorationLine: 'underline',
+  },
+  loopCard: {
+    marginHorizontal: Spacing['2xl'],
+    marginBottom: Spacing.sm,
+    gap: 4,
+  },
+  loopLabel: { fontSize: Typography.sizes.xs, fontWeight: Typography.weights.bold, letterSpacing: 1 },
+  loopValue: { fontSize: Typography.sizes.base },
 })

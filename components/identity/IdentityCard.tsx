@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { useTheme } from '@/hooks/useTheme'
@@ -59,11 +60,16 @@ export function IdentityCard({
             >
               {identity.label}
             </Text>
-            <Text style={[styles.streak, { color: theme.textSecondary }]}>
-              {identity.streak > 0
-                ? `${identity.streak} day streak 🔥`
-                : 'Start your streak today'}
-            </Text>
+            <View style={styles.streakRow}>
+              {identity.streak > 0 && (
+                <Ionicons name="flame" size={12} color="#F59E0B" />
+              )}
+              <Text style={[styles.streak, { color: theme.textSecondary }]}>
+                {identity.streak > 0
+                  ? `${identity.streak} day streak`
+                  : 'Start your streak today'}
+              </Text>
+            </View>
           </View>
           <View style={styles.scoreCircle}>
             <Text style={[styles.scoreValue, { color: identity.color }]}>
@@ -137,9 +143,9 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.bold,
   },
+  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   streak: {
     fontSize: Typography.sizes.sm,
-    marginTop: 2,
   },
   scoreCircle: {
     alignItems: 'center',

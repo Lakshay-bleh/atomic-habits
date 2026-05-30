@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  Alert,
 } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -26,6 +27,7 @@ interface HabitCardProps {
   streak: HabitStreak | null
   onComplete: () => void
   onPress: () => void
+  onUncomplete?: () => void
 }
 
 export function HabitCard({
@@ -34,6 +36,7 @@ export function HabitCard({
   streak,
   onComplete,
   onPress,
+  onUncomplete,
 }: HabitCardProps) {
   const theme = useTheme()
   const haptics = useHaptics()
@@ -49,7 +52,17 @@ export function HabitCard({
   }))
 
   const handleComplete = () => {
-    if (isCompleted) return
+    if (isCompleted) {
+      Alert.alert(
+        'Undo completion?',
+        "Remove today's check-in for this habit?",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Undo', style: 'destructive', onPress: onUncomplete },
+        ]
+      )
+      return
+    }
     haptics.success()
     checkScale.value = withSequence(
       withSpring(1.4, { damping: 8 }),
@@ -128,7 +141,7 @@ export function HabitCard({
                 ]}
               >
                 <Ionicons
-                  name={isCompleted ? 'checkmark' : 'checkmark'}
+                  name={isCompleted ? 'checkmark' : 'ellipse-outline'}
                   size={18}
                   color={isCompleted ? '#fff' : theme.textMuted}
                 />
@@ -139,12 +152,7 @@ export function HabitCard({
           {/* Footer row */}
           <View style={styles.footerRow}>
             {currentStreak > 0 && (
-              <Badge
-                label={`${currentStreak}d streak`}
-                color={color}
-                emoji="🔥"
-                size="sm"
-              />
+              <Badge label={`${currentStreak}d streak`} color={color} size="sm" />
             )}
             {habit.friction_score <= 3 && (
               <Badge label="Low friction" color="#10B981" size="sm" />

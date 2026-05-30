@@ -71,6 +71,29 @@ export const habitsService = {
     return data
   },
 
+  async deleteHabitLog(habitId: string, userId: string, date: string): Promise<void> {
+    const { error } = await supabase
+      .from('habit_logs')
+      .delete()
+      .eq('habit_id', habitId)
+      .eq('user_id', userId)
+      .eq('date', date)
+    if (error) throw error
+  },
+
+  async getLogsForDateRange(userId: string, startDate: string, endDate: string): Promise<HabitLog[]> {
+    const { data, error } = await supabase
+      .from('habit_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .eq('skipped', false)
+      .order('date', { ascending: false })
+    if (error) throw error
+    return data ?? []
+  },
+
   async getLogsForDate(userId: string, date: string): Promise<HabitLog[]> {
     const { data, error } = await supabase
       .from('habit_logs')

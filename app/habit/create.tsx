@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Switch,
+  Alert,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -16,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuthStore } from '@/stores/authStore'
 import { useHabitsStore } from '@/stores/habitsStore'
 import { useIdentityStore } from '@/stores/identityStore'
+import type { HabitCategory, HabitDifficulty } from '@/types'
 import { coachService } from '@/services/ai/coach'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -24,7 +26,6 @@ import { Badge } from '@/components/ui/Badge'
 import { useTheme } from '@/hooks/useTheme'
 import { Typography, Spacing, Radius } from '@/constants/themes'
 import { HABIT_CATEGORIES } from '@/constants/identities'
-import type { HabitCategory, HabitDifficulty } from '@/types'
 
 const schema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
@@ -37,8 +38,9 @@ type FormData = z.infer<typeof schema>
 
 export default function CreateHabitScreen() {
   const theme = useTheme()
+  const { id: editId } = useLocalSearchParams<{ id?: string }>()
   const { user } = useAuthStore()
-  const { createHabit } = useHabitsStore()
+  const { createHabit, updateHabit, habits } = useHabitsStore()
   const { identities } = useIdentityStore()
   const [category, setCategory] = useState<HabitCategory>('health')
   const [difficulty, setDifficulty] = useState<HabitDifficulty>('easy')
@@ -54,6 +56,19 @@ export default function CreateHabitScreen() {
 
   const titleValue = watch('title')
 
+  useEffect(() => {
+    if (!editId) return
+    const existing = habits.find((h) => h.id === editId)
+    if (!existing) return
+    setValue('title', existing.title)
+    if (existing.cue) setValue('cue', existing.cue)
+    if (existing.reward) setValue('reward', existing.reward)
+    if (existing.tiny_version) setValue('tiny_version', existing.tiny_version)
+    if (existing.category) setCategory(existing.category as HabitCategory)
+    if (existing.difficulty) setDifficulty(existing.difficulty as HabitDifficulty)
+    if (existing.identity_id) setSelectedIdentity(existing.identity_id)
+  }, [editId])
+
   const suggestTinyHabit = async () => {
     if (!titleValue) return
     setAiSuggesting(true)
@@ -67,34 +82,50 @@ export default function CreateHabitScreen() {
   }
 
   const onSubmit = async (data: FormData) => {
-    if (!user?.id) return
+    if (!user?.id) {
+      Alert.alert('Error', 'Not signed in')
+      return
+    }
     setIsLoading(true)
     try {
-      await createHabit({
-        user_id: user.id,
-        title: data.title,
-        description: null,
-        identity_id: selectedIdentity,
-        cue: data.cue ?? null,
-        craving: null,
-        response: data.title,
-        reward: data.reward ?? null,
-        tiny_version: data.tiny_version ?? null,
-        normal_version: data.title,
-        frequency: 'daily',
-        scheduled_days: [0, 1, 2, 3, 4, 5, 6],
-        reminder_time: null,
-        start_date: new Date().toISOString().split('T')[0],
-        friction_score: difficulty === 'tiny' ? 1 : difficulty === 'easy' ? 3 : difficulty === 'medium' ? 6 : 9,
-        difficulty,
-        environment_setup: null,
-        category,
-        color: null,
-        icon: HABIT_CATEGORIES.find((c) => c.id === category)?.emoji ?? null,
-        is_archived: false,
-        is_bad_habit: false,
-        stack_after_habit_id: null,
-      })
+      if (editId) {
+        await updateHabit(editId, {
+          title: data.title,
+          cue: data.cue ?? null,
+          reward: data.reward ?? null,
+          tiny_version: data.tiny_version ?? null,
+          category,
+          difficulty,
+          identity_id: selectedIdentity,
+          icon: HABIT_CATEGORIES.find((c) => c.id === category)?.emoji ?? null,
+        })
+      } else {
+        await createHabit({
+          user_id: user.id,
+          title: data.title,
+          description: null,
+          identity_id: selectedIdentity,
+          cue: data.cue ?? null,
+          craving: null,
+          response: data.title,
+          reward: data.reward ?? null,
+          tiny_version: data.tiny_version ?? null,
+          normal_version: data.title,
+          frequency: 'daily',
+          scheduled_days: [0, 1, 2, 3, 4, 5, 6],
+          reminder_time: null,
+          start_date: new Date().toISOString().split('T')[0],
+          friction_score: difficulty === 'tiny' ? 1 : difficulty === 'easy' ? 3 : difficulty === 'medium' ? 6 : 9,
+          difficulty,
+          environment_setup: null,
+          category,
+          color: null,
+          icon: HABIT_CATEGORIES.find((c) => c.id === category)?.emoji ?? null,
+          is_archived: false,
+          is_bad_habit: false,
+          stack_after_habit_id: null,
+        })
+      }
       router.back()
     } catch (err) {
       console.error(err)
@@ -103,11 +134,11 @@ export default function CreateHabitScreen() {
     }
   }
 
-  const DIFFICULTIES: { id: HabitDifficulty; label: string; emoji: string }[] = [
-    { id: 'tiny', label: 'Tiny', emoji: '🌱' },
-    { id: 'easy', label: 'Easy', emoji: '😊' },
-    { id: 'medium', label: 'Medium', emoji: '💪' },
-    { id: 'hard', label: 'Hard', emoji: '🔥' },
+  const DIFFICULTIES: { id: HabitDifficulty; label: string }[] = [
+    { id: 'tiny', label: 'Tiny' },
+    { id: 'easy', label: 'Easy' },
+    { id: 'medium', label: 'Medium' },
+    { id: 'hard', label: 'Hard' },
   ]
 
   return (
@@ -116,7 +147,7 @@ export default function CreateHabitScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.text }]}>New Habit</Text>
+        <Text style={[styles.title, { color: theme.text }]}>{editId ? 'Edit Habit' : 'New Habit'}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -145,7 +176,7 @@ export default function CreateHabitScreen() {
               Two-Minute Version
             </Text>
             <Button
-              title={aiSuggesting ? '...' : '✨ AI Suggest'}
+              title={aiSuggesting ? '...' : 'AI Suggest'}
               variant="ghost"
               size="sm"
               onPress={suggestTinyHabit}
@@ -209,7 +240,6 @@ export default function CreateHabitScreen() {
               ]}
               onPress={() => setDifficulty(d.id)}
             >
-              <Text style={styles.diffEmoji}>{d.emoji}</Text>
               <Text
                 style={[
                   styles.diffLabel,
@@ -298,7 +328,7 @@ export default function CreateHabitScreen() {
         )}
 
         <Button
-          title="Create Habit"
+          title={editId ? 'Save Changes' : 'Create Habit'}
           onPress={handleSubmit(onSubmit)}
           isLoading={isLoading}
           fullWidth

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -25,7 +26,7 @@ export default function OnboardingHabitsScreen() {
   const theme = useTheme()
   const haptics = useHaptics()
   const { identities: identitiesParam } = useLocalSearchParams<{ identities: string }>()
-  const { user } = useAuthStore()
+  const { user, updateProfile, loadUser } = useAuthStore()
   const { createHabit } = useHabitsStore()
   const { createIdentity } = useIdentityStore()
   const [suggestions, setSuggestions] = useState<string[]>([])
@@ -66,15 +67,26 @@ export default function OnboardingHabitsScreen() {
   }
 
   const finish = async () => {
-    if (!user?.id || selected.size === 0) return
+    if (selected.size === 0) return
+    // If user isn't in store yet (just registered), load the session first
+    let uid = user?.id
+    if (!uid) {
+      await loadUser()
+      uid = useAuthStore.getState().user?.id
+    }
+    if (!uid) {
+      Alert.alert('Not signed in', 'Your session expired. Please sign in again.', [
+        { text: 'OK', onPress: () => router.replace('/(auth)/login') },
+      ])
+      return
+    }
     setSaving(true)
     try {
       const today = new Date().toISOString().split('T')[0]
-      // Create identities
       for (const templateId of selectedTemplates) {
         const tpl = IDENTITY_TEMPLATES[templateId]
         await createIdentity({
-          user_id: user.id,
+          user_id: uid,
           label: tpl.label,
           description: tpl.description,
           color: tpl.color,
@@ -86,10 +98,9 @@ export default function OnboardingHabitsScreen() {
           total_reinforcements: 0,
         })
       }
-      // Create selected habits
       for (const title of Array.from(selected)) {
         await createHabit({
-          user_id: user.id,
+          user_id: uid,
           title,
           description: null,
           identity_id: null,
@@ -114,7 +125,11 @@ export default function OnboardingHabitsScreen() {
           stack_after_habit_id: null,
         })
       }
-      router.replace('/' as never)
+      // Mark onboarding done — without this, index.tsx redirects back to welcome
+      await updateProfile({ onboarding_completed: true })
+      router.replace('/(tabs)')
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong. Please try again.')
     } finally {
       setSaving(false)
     }

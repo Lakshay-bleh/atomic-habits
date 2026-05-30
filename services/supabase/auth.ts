@@ -8,6 +8,7 @@ export const authService = {
       password,
       options: {
         data: { full_name: fullName },
+        emailRedirectTo: 'atomichabits://',
       },
     })
     if (error) throw error

@@ -258,10 +258,12 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 -- ============================================================
 
 -- Auto-create profile on user signup
-CREATE OR REPLACE FUNCTION handle_new_user()
+-- NOTE: Must use public. prefix + SET search_path = '' for SECURITY DEFINER
+-- functions that fire from auth schema triggers, otherwise Supabase RLS blocks the insert.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, full_name)
+  INSERT INTO public.profiles (id, email, full_name)
   VALUES (
     NEW.id,
     NEW.email,
@@ -269,11 +271,12 @@ BEGIN
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Update habit streak on log insert
 CREATE OR REPLACE FUNCTION update_habit_streak()

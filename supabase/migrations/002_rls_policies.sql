@@ -24,6 +24,14 @@ $$ LANGUAGE SQL STABLE;
 -- ============================================================
 -- PROFILES
 -- ============================================================
+
+-- Allow the auth trigger (handle_new_user) to insert new profiles.
+-- The trigger runs as a SECURITY DEFINER function but still needs an
+-- INSERT policy when RLS is enabled, because the auth.uid() context
+-- is not yet established at the moment of user creation.
+CREATE POLICY "Enable insert for auth trigger"
+  ON profiles FOR INSERT WITH CHECK (true);
+
 CREATE POLICY "Users can view own profile"
   ON profiles FOR SELECT USING (id = auth_uid());
 

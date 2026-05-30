@@ -11,34 +11,48 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Animated, { FadeInDown, FadeInLeft, FadeInRight } from 'react-native-reanimated'
+// edges={['top']} prevents double bottom padding on top of the tab bar
+import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuthStore } from '@/stores/authStore'
 import { useHabitsStore } from '@/stores/habitsStore'
 import { useIdentityStore } from '@/stores/identityStore'
 import { coachService } from '@/services/ai/coach'
-import { Card } from '@/components/ui/Card'
 import { useTheme } from '@/hooks/useTheme'
 import { Typography, Spacing, Radius } from '@/constants/themes'
 import type { AICoachMessage } from '@/types'
 
 const QUICK_PROMPTS = [
   "Why am I struggling to stay consistent?",
-  "Help me design my morning routine",
+  "Help me design a morning routine",
   "I missed 3 days — how do I recover?",
-  "What's my biggest friction point?",
-  "Help me create a tiny version of my habit",
+  "What habit should I focus on first?",
+  "How do I reduce friction for my hardest habit?",
 ]
 
 export default function CoachScreen() {
   const theme = useTheme()
   const { user } = useAuthStore()
   const { habits, getStreakForHabit } = useHabitsStore()
-  const { primaryIdentity } = useIdentityStore()
+  const { primaryIdentity, identities } = useIdentityStore()
   const [messages, setMessages] = useState<AICoachMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
+
+  const buildContext = () => ({
+    user_identity: primaryIdentity?.label ?? 'someone building better habits',
+    recent_habits: habits.slice(0, 8).map((h) => h.title),
+    streak_data: Object.fromEntries(
+      habits.map((h) => [h.title, getStreakForHabit(h.id)?.current_streak ?? 0])
+    ),
+    emotional_trend: 'neutral',
+    focus_areas: identities.map((i) => i.label),
+    last_missed_habits: habits
+      .filter((h) => (getStreakForHabit(h.id)?.current_streak ?? 0) === 0)
+      .slice(0, 3)
+      .map((h) => h.title),
+  })
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return
@@ -54,81 +68,56 @@ export default function CoachScreen() {
     setIsLoading(true)
 
     try {
-      const context = {
-        user_identity: primaryIdentity?.label ?? 'someone building better habits',
-        recent_habits: habits.slice(0, 5).map((h) => h.title),
-        streak_data: Object.fromEntries(
-          habits.map((h) => [
-            h.title,
-            getStreakForHabit(h.id)?.current_streak ?? 0,
-          ]),
-        ),
-        emotional_trend: 'neutral',
-        focus_areas: primaryIdentity ? [primaryIdentity.label] : [],
-        last_missed_habits: [],
-      }
-
       const allMsgs = [...messages, userMsg]
-      const response = await coachService.chat(allMsgs, context)
-
-      const assistantMsg: AICoachMessage = {
-        role: 'assistant',
-        content: response,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, assistantMsg])
+      const response = await coachService.chat(allMsgs, buildContext())
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: response, timestamp: new Date().toISOString() },
+      ])
     } catch {
-      const errorMsg: AICoachMessage = {
-        role: 'assistant',
-        content: "I'm having trouble connecting right now. Please try again.",
-        timestamp: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, errorMsg])
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: "Having trouble connecting. Check your internet and try again.",
+          timestamp: new Date().toISOString(),
+        },
+      ])
     } finally {
       setIsLoading(false)
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
     }
   }
 
-  const firstLoad = async () => {
-    if (!primaryIdentity || messages.length > 0) return
-    setIsLoading(true)
-    try {
-      const context = {
-        user_identity: primaryIdentity.label,
-        recent_habits: habits.slice(0, 5).map((h) => h.title),
-        streak_data: Object.fromEntries(
-          habits.map((h) => [h.title, getStreakForHabit(h.id)?.current_streak ?? 0]),
-        ),
-        emotional_trend: 'neutral',
-        focus_areas: [primaryIdentity.label],
-        last_missed_habits: [],
-      }
-      const greeting = await coachService.getDailyCoaching(context)
-      setMessages([{
-        role: 'assistant',
-        content: greeting,
-        timestamp: new Date().toISOString(),
-      }])
-    } catch {} finally {
-      setIsLoading(false)
-    }
+  const startNewChat = () => {
+    setMessages([])
+    setInput('')
   }
 
   useEffect(() => {
-    firstLoad()
+    if (!primaryIdentity || messages.length > 0) return
+    setIsLoading(true)
+    coachService
+      .getDailyCoaching(buildContext())
+      .then((greeting) => {
+        setMessages([{ role: 'assistant', content: greeting, timestamp: new Date().toISOString() }])
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false))
   }, [primaryIdentity?.id])
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View>
           <Text style={[styles.title, { color: theme.text }]}>AI Coach</Text>
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Powered by Groq · Llama 3 70B
+            {habits.length} habits · {identities.length} identities
           </Text>
         </View>
-        <View style={[styles.statusDot, { backgroundColor: theme.success }]} />
+        <TouchableOpacity onPress={startNewChat} style={styles.newChatBtn}>
+          <Ionicons name="create-outline" size={22} color={theme.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -140,99 +129,57 @@ export default function CoachScreen() {
           ref={scrollRef}
           contentContainerStyle={styles.messages}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() =>
-            scrollRef.current?.scrollToEnd({ animated: true })
-          }
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.length === 0 && !isLoading && (
-            <Animated.View entering={FadeInDown.duration(600)}>
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🤖</Text>
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                  Your AI habit coach
-                </Text>
-                <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
-                  Ask me anything about building habits, overcoming resistance, or
-                  designing your identity.
-                </Text>
-              </View>
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                Your AI habit coach
+              </Text>
+              <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
+                Ask anything about building habits, overcoming resistance, or designing your system.
+              </Text>
               <View style={styles.quickPrompts}>
                 {QUICK_PROMPTS.map((prompt, idx) => (
-                  <Animated.View
+                  <TouchableOpacity
                     key={idx}
-                    entering={FadeInDown.delay(200 + idx * 80).duration(400)}
+                    style={[styles.quickPrompt, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    onPress={() => sendMessage(prompt)}
                   >
-                    <TouchableOpacity
-                      style={[
-                        styles.quickPrompt,
-                        {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.border,
-                        },
-                      ]}
-                      onPress={() => sendMessage(prompt)}
-                    >
-                      <Text
-                        style={[
-                          styles.quickPromptText,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        {prompt}
-                      </Text>
-                    </TouchableOpacity>
-                  </Animated.View>
+                    <Text style={[styles.quickPromptText, { color: theme.textSecondary }]}>
+                      {prompt}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
               </View>
-            </Animated.View>
+            </View>
           )}
 
           {messages.map((msg, idx) => (
             <Animated.View
               key={idx}
-              entering={
-                msg.role === 'user'
-                  ? FadeInRight.duration(400)
-                  : FadeInLeft.duration(400)
-              }
+              entering={msg.role === 'user' ? FadeInRight.duration(300) : FadeInLeft.duration(300)}
               style={[
                 styles.messageBubble,
                 msg.role === 'user' ? styles.userBubble : styles.assistantBubble,
               ]}
             >
               {msg.role === 'assistant' && (
-                <View
-                  style={[
-                    styles.assistantAvatar,
-                    { backgroundColor: `${theme.primary}30` },
-                  ]}
-                >
-                  <Text style={{ fontSize: 14 }}>🤖</Text>
+                <View style={[styles.avatar, { backgroundColor: `${theme.primary}25` }]}>
+                  <Ionicons name="sparkles" size={14} color={theme.primary} />
                 </View>
               )}
               <View
                 style={[
                   styles.bubble,
                   {
-                    backgroundColor:
-                      msg.role === 'user' ? theme.primary : theme.surfaceElevated,
-                    borderColor:
-                      msg.role === 'user'
-                        ? 'transparent'
-                        : theme.border,
+                    backgroundColor: msg.role === 'user' ? theme.primary : theme.surfaceElevated,
+                    borderColor: msg.role === 'user' ? 'transparent' : theme.border,
                     maxWidth: msg.role === 'user' ? '78%' : '85%',
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.messageText,
-                    {
-                      color:
-                        msg.role === 'user' ? '#fff' : theme.text,
-                    },
-                  ]}
-                >
+                <Text style={[styles.messageText, { color: msg.role === 'user' ? '#fff' : theme.text }]}>
                   {msg.content}
                 </Text>
               </View>
@@ -241,70 +188,33 @@ export default function CoachScreen() {
 
           {isLoading && (
             <View style={[styles.messageBubble, styles.assistantBubble]}>
-              <View
-                style={[
-                  styles.assistantAvatar,
-                  { backgroundColor: `${theme.primary}30` },
-                ]}
-              >
-                <Text style={{ fontSize: 14 }}>🤖</Text>
+              <View style={[styles.avatar, { backgroundColor: `${theme.primary}25` }]}>
+                <Ionicons name="sparkles" size={14} color={theme.primary} />
               </View>
-              <View
-                style={[
-                  styles.bubble,
-                  { backgroundColor: theme.surfaceElevated, borderColor: theme.border },
-                ]}
-              >
+              <View style={[styles.bubble, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
                 <ActivityIndicator size="small" color={theme.primary} />
               </View>
             </View>
           )}
         </ScrollView>
 
-        {/* Input */}
-        <View
-          style={[
-            styles.inputRow,
-            {
-              backgroundColor: theme.surface,
-              borderTopColor: theme.border,
-            },
-          ]}
-        >
+        <View style={[styles.inputRow, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
           <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: theme.surfaceHigh,
-                color: theme.text,
-                borderColor: theme.border,
-              },
-            ]}
-            placeholder="Ask your coach anything..."
+            style={[styles.textInput, { backgroundColor: theme.surfaceHigh, color: theme.text, borderColor: theme.border }]}
+            placeholder="Ask your coach..."
             placeholderTextColor={theme.textMuted}
             value={input}
             onChangeText={setInput}
             multiline
             maxLength={500}
-            onSubmitEditing={() => sendMessage(input)}
             returnKeyType="send"
           />
           <TouchableOpacity
-            style={[
-              styles.sendButton,
-              {
-                backgroundColor:
-                  input.trim() ? theme.primary : theme.surfaceHigh,
-              },
-            ]}
+            style={[styles.sendButton, { backgroundColor: input.trim() ? theme.primary : theme.surfaceHigh }]}
             onPress={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
           >
-            <Ionicons
-              name="send"
-              size={18}
-              color={input.trim() ? '#fff' : theme.textMuted}
-            />
+            <Ionicons name="send" size={18} color={input.trim() ? '#fff' : theme.textMuted} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -321,52 +231,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['2xl'],
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.base,
+    borderBottomWidth: 1,
   },
-  title: {
-    fontSize: Typography.sizes['2xl'],
-    fontWeight: Typography.weights.extrabold,
-  },
+  title: { fontSize: Typography.sizes['2xl'], fontWeight: Typography.weights.extrabold },
   subtitle: { fontSize: Typography.sizes.xs, marginTop: 2 },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  messages: {
-    paddingHorizontal: Spacing.base,
-    paddingBottom: Spacing.base,
-    gap: Spacing.sm,
-  },
-  emptyState: { alignItems: 'center', padding: Spacing['2xl'], gap: Spacing.sm },
-  emptyIcon: { fontSize: 48 },
-  emptyTitle: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.bold,
-  },
-  emptyDesc: { fontSize: Typography.sizes.base, textAlign: 'center', lineHeight: 22 },
-  quickPrompts: { gap: Spacing.xs, paddingHorizontal: Spacing.base },
-  quickPrompt: {
-    padding: Spacing.sm,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
+  newChatBtn: { padding: Spacing.xs },
+  messages: { paddingHorizontal: Spacing.base, paddingVertical: Spacing.base, gap: Spacing.sm },
+  emptyState: { padding: Spacing['2xl'], gap: Spacing.base },
+  emptyTitle: { fontSize: Typography.sizes.xl, fontWeight: Typography.weights.bold },
+  emptyDesc: { fontSize: Typography.sizes.base, lineHeight: 22 },
+  quickPrompts: { gap: Spacing.xs, marginTop: Spacing.sm },
+  quickPrompt: { padding: Spacing.sm, borderRadius: Radius.lg, borderWidth: 1 },
   quickPromptText: { fontSize: Typography.sizes.sm },
-  messageBubble: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.xs,
-  },
+  messageBubble: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.xs },
   userBubble: { justifyContent: 'flex-end' },
   assistantBubble: { justifyContent: 'flex-start' },
-  assistantAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  bubble: {
-    padding: Spacing.sm,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
+  avatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  bubble: { padding: Spacing.sm, borderRadius: Radius.lg, borderWidth: 1 },
   messageText: { fontSize: Typography.sizes.base, lineHeight: 22 },
   inputRow: {
     flexDirection: 'row',
@@ -384,11 +265,5 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     maxHeight: 100,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 })
